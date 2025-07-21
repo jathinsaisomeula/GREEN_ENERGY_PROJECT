@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: green_energy_db
+      POSTGRES_USER: jathinsai
+      POSTGRES_PASSWORD: jathinsai143
+    ports:
+      - "5434:5432" # Map host port 5434 to container port 5432
+    volumes:
+      - pg_data:/var/lib/postgresql/data # Persistent data volume for PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jathinsai -d green_energy_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  airflow-webserver:
+    # CRITICAL CHANGE: Use 'build' instead of 'image' to build from our Dockerfile
+    build: . # Build from the Dockerfile in the current directory
+    command: webserver
+    ports:
+      - "8080:8080" # Airflow UI port
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://jathinsai:jathinsai143@postgres/green_energy_db
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__LOAD_DAGS_IN_WEBSERVER: 'true'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__AUTHENTICATE: 'True'
+      AIRFLOW_CONN_POSTGRES_DEFAULT: postgresql://jathinsai:jathinsai143@postgres:5432/green_energy_db
+    volumes:
+      - ./dags:/opt/airflow/dags # Mount your DAGs folder
+      - ./logs:/opt/airflow/logs # Logs folder
+      - ./plugins:/opt/airflow/plugins # Plugins folder (if needed)
+      - /var/run/docker.sock:/var/run/docker.sock # For Docker-in-Docker if using DockerOperator
+      - "./:/usr/local/airflow_data/" # Mount your current project directory (which contains the CSV)
+    depends_on:
+      postgres:
+            condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  airflow-scheduler:
+    # CRITICAL CHANGE: Use 'build' instead of 'image' to build from our Dockerfile
+    build: . # Build from the Dockerfile in the current directory
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://jathinsai:jathinsai143@postgres/green_energy_db
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__LOAD_DAGS_IN_WEBSERVER: 'true'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__AUTHENTICATE: 'True'
+      AIRFLOW_CONN_POSTGRES_DEFAULT: postgresql://jathinsai:jathinsai143@postgres:5432/green_energy_db
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "./:/usr/local/airflow_data/"
+    depends_on:
+      postgres:
+            condition: service_healthy
+    
+
+volumes:
+  pg_data: # Define the named volume for PostgreSQL data persistence
