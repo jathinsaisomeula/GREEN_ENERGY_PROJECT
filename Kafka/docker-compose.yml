@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9093:9093" # IMPORTANT: This is the port your host will connect to Kafka on (e.g., localhost:9093)
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: CLIENT://0.0.0.0:9093,INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://host.docker.internal:9093,INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  python-app:
+    build: .
+    hostname: python-app
+    container_name: greenenergydata-python-app-1 # This name is carried over, you can change it if you rebuild the image with a new name in docker-compose.yml
+    volumes:
+      - .:/app # Mounts your current directory into the /app directory inside the container
+    command: sleep infinity # Keeps the container running so you can exec into it
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BROKER: kafka:29092 # This is the internal Docker network address for Kafka
+
+volumes:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
